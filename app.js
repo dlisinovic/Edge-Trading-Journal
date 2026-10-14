@@ -140,9 +140,9 @@ const qtyWord = (m, n) => m === 'forex' ? `${n} lot${Number(n) === 1 ? '' : 's'}
 
 function defaultSettings() {
   return {
-    kind: 'settings', accountName: 'LucidFlex 25K',
-    start: 25000, target: 1250, maxDD: 1000, ddType: 'trailing', dailyLimit: 600,
-    riskPerTrade: 600, defaultQty: 1, defaultSym: 'NQ',
+    kind: 'settings', accountName: '', accountSet: false,
+    start: 0, target: 0, maxDD: 0, ddType: 'trailing', dailyLimit: 0,
+    riskPerTrade: 0, defaultQty: 1, defaultSym: 'NQ',
     markets: ['futures', 'forex'], defaultMarket: 'futures', defaultFx: 'EURUSD', defaultLots: 1, fxAdded: true,
     instruments: DEFAULT_INSTRUMENTS.map(i => Object.assign({}, i)),
     setups: DEFAULT_SETUPS.slice()
@@ -152,6 +152,8 @@ function mergeSettings(s) {
   const out = Object.assign(defaultSettings(), s || {});
   if (!Array.isArray(out.instruments) || !out.instruments.length) out.instruments = defaultSettings().instruments;
   if (!Array.isArray(out.setups)) out.setups = DEFAULT_SETUPS.slice();
+  // settings saved with the old built-in account (never edited by the user): start empty instead
+  if (s && !s.accountSet && s.accountName === 'LucidFlex 25K') Object.assign(out, {accountName: '', start: 0, target: 0, maxDD: 0, dailyLimit: 0, riskPerTrade: 0});
   // settings saved before forex existed: add the default pairs once
   if (!(s && s.fxAdded)) {
     const have = new Set(out.instruments.map(i => i.sym));
@@ -265,9 +267,19 @@ function writeError(e) {
 /* =========================================================
    Sample data — generated in memory, never saved
    ========================================================= */
-function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+// the demo should show a healthy, believable journal: re-roll the random sample until it's moderately profitable
 function makeSample() {
-  const R = mulberry32(20261013);
+  let best = null;
+  for (let k = 0; k < 40; k++) {
+    const smp = makeSampleWith(20261013 + k), net = smp.trades.reduce((a, t) => a + t.pnl, 0);
+    if (net >= 1500 && net <= 6000) return smp;
+    if (!best || net > best.net) best = Object.assign(smp, {net});
+  }
+  return best;
+}
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function makeSampleWith(seed) {
+  const R = mulberry32(seed);
   const pick = a => a[Math.floor(R() * a.length)];
   const picks = (a, n) => { const c = a.slice(), out = []; while (out.length < n && c.length) out.push(c.splice(Math.floor(R() * c.length), 1)[0]); return out; };
   const rint = (a, b) => a + Math.floor(R() * (b - a + 1));
@@ -319,7 +331,7 @@ function makeSample() {
       if (revenge) dayHadRevenge = true;
       const emoBefore = revenge ? ['Revenge','Impatient'] : good ? picks(['Calm','Focused','Confident','Patient'], R() < 0.4 ? 2 : 1) : fomo ? ['FOMO', pick(['Anxious','Impatient','Excited'])] : picks(['Anxious','Bored','Impatient','Tired','Greedy','Distracted'], R() < 0.4 ? 2 : 1);
       const followedPlan = good ? (R() < 0.86 ? 'yes' : 'partly') : revenge ? 'no' : (R() < 0.4 ? 'partly' : 'no');
-      const win = R() < (good ? 0.64 : revenge ? 0.24 : 0.36);
+      const win = R() < (good ? 0.72 : revenge ? 0.22 : 0.36);
       let pts, exitReason;
       if (win) {
         if (R() < 0.72) { pts = sp.tgt; exitReason = 'Hit target'; }
@@ -852,23 +864,46 @@ function renderBanner() {
 /* =========================================================
    Views
    ========================================================= */
+// sample preview: a funded account sized to the sample trades, so the demo never shows as blown
+function sampleAccount() {
+  if (S.sampleAcct) return S.sampleAcct;
+  const days = new Map();
+  for (const t of sortTrades(S.sample.trades)) days.set(t.date, (days.get(t.date) || 0) + t.pnl);
+  let c = 0, peak = 0, dd = 0, worst = 0;
+  for (const v of days.values()) { c += v; peak = Math.max(peak, c); dd = Math.max(dd, peak - c); worst = Math.min(worst, v); }
+  const up = (v, n) => Math.ceil(v / n) * n;
+  S.sampleAcct = {accountName: 'Sample 50K funded account', start: 50000, ddType: 'trailing', riskPerTrade: 600,
+    target: up(Math.max(3000, c + 1500), 500), maxDD: up(Math.max(2500, dd - Math.min(0, c) + 1000), 500), dailyLimit: up(Math.max(1000, -worst * 1.3), 100)};
+  return S.sampleAcct;
+}
+const acctSettings = () => S.previewOn ? Object.assign({}, S.settings, sampleAccount()) : S.settings;
 function accountCard(trades) {
-  const s = S.settings, a = accountState(trades, s);
+  const s = acctSettings();
+  if (!(s.start > 0)) return {a: null, s, html: `<div class="card">
+    <div class="eyebrow">Account</div><p class="h3" style="margin-top:6px">Track a funded account</p>
+    <p class="excerpt">Add your account size, profit target, max drawdown and daily loss limit to see your balance and how close you are to each rule.</p>
+    <a class="btn btn-sm btn-primary" href="#settings" data-go="settings">Set up account</a>
+  </div>`};
+  const a = accountState(trades, s);
   const tgtPct = s.target ? clamp(a.profit / s.target, 0, 1) : 0;
   const bufPct = s.maxDD ? clamp(a.buffer / s.maxDD, 0, 1) : 0;
   const dayPct = s.dailyLimit ? clamp(a.dailyUsed / s.dailyLimit, 0, 1) : 0;
-  return {a, html: `<div class="card">
-    <div class="card-head"><div><div class="eyebrow">Account</div><h2 class="h3">${esc(s.accountName || 'My account')}</h2></div><a class="link" href="#settings" data-go="settings">Edit rules</a></div>
+  const meters = [
+    s.target > 0 ? `<div class="meter"><div class="meter-top"><span>Profit target</span><b>${money(Math.max(0, a.profit), {sign: false})} / ${money(s.target, {sign: false})}</b></div><div class="meter-track"><div class="meter-fill" style="width:${(tgtPct * 100).toFixed(1)}%"></div></div><span class="hint">${a.profit >= s.target ? 'Target reached.' : `${money(s.target - a.profit, {sign: false})} to go`}</span></div>` : '',
+    s.maxDD > 0 ? `<div class="meter"><div class="meter-top"><span>Drawdown buffer</span><b>${money(Math.max(0, a.buffer), {sign: false})} left</b></div><div class="meter-track"><div class="meter-fill ${bufPct > 0.5 ? 'good' : bufPct > 0.25 ? 'warn' : 'bad'}" style="width:${(bufPct * 100).toFixed(1)}%"></div></div><span class="hint">Account fails below ${money(a.level, {sign: false})}${s.ddType === 'trailing' ? ' · trails end-of-day highs, locks at starting balance' : ''}</span></div>` : '',
+    s.dailyLimit > 0 ? `<div class="meter"><div class="meter-top"><span>Daily loss used</span><b>${money(a.dailyUsed, {sign: false})} / ${money(s.dailyLimit, {sign: false})}</b></div><div class="meter-track"><div class="meter-fill ${dayPct < 0.5 ? 'good' : dayPct < 0.85 ? 'warn' : 'bad'}" style="width:${(dayPct * 100).toFixed(1)}%"></div></div><span class="hint">${dayPct >= 1 ? 'Daily limit hit. Done for today.' : `Today: <span class="${cls(a.todayNet)}">${money(a.todayNet)}</span>`}</span></div>` : ''
+  ].join('');
+  return {a, s, html: `<div class="card">
+    <div class="card-head"><div><div class="eyebrow">Account</div><h2 class="h3">${esc(s.accountName || 'My account')}</h2></div>${S.previewOn ? '<span class="pill">Sample</span>' : '<a class="link" href="#settings" data-go="settings">Edit rules</a>'}</div>
     <div class="acct-bal"><span class="num big">${money(a.bal, {sign: false})}</span><span class="num ${cls(a.profit)}" style="font-size:15px">${money(a.profit)} total</span></div>
-    <div class="meters">
-      <div class="meter"><div class="meter-top"><span>Profit target</span><b>${money(Math.max(0, a.profit), {sign: false})} / ${money(s.target, {sign: false})}</b></div><div class="meter-track"><div class="meter-fill" style="width:${(tgtPct * 100).toFixed(1)}%"></div></div><span class="hint">${a.profit >= s.target ? 'Target reached.' : `${money(s.target - a.profit, {sign: false})} to go`}</span></div>
-      <div class="meter"><div class="meter-top"><span>Drawdown buffer</span><b>${money(Math.max(0, a.buffer), {sign: false})} left</b></div><div class="meter-track"><div class="meter-fill ${bufPct > 0.5 ? 'good' : bufPct > 0.25 ? 'warn' : 'bad'}" style="width:${(bufPct * 100).toFixed(1)}%"></div></div><span class="hint">Account fails below ${money(a.level, {sign: false})}${s.ddType === 'trailing' ? ' · trails end-of-day highs, locks at starting balance' : ''}</span></div>
-      <div class="meter"><div class="meter-top"><span>Daily loss used</span><b>${money(a.dailyUsed, {sign: false})} / ${money(s.dailyLimit, {sign: false})}</b></div><div class="meter-track"><div class="meter-fill ${dayPct < 0.5 ? 'good' : dayPct < 0.85 ? 'warn' : 'bad'}" style="width:${(dayPct * 100).toFixed(1)}%"></div></div><span class="hint">${dayPct >= 1 ? 'Daily limit hit. Done for today.' : `Today: <span class="${cls(a.todayNet)}">${money(a.todayNet)}</span>`}</span></div>
-    </div>
+    ${meters ? `<div class="meters">${meters}</div>` : ''}
   </div>`};
 }
-function projectionCard(trades, a) {
-  const pr = projection(trades, S.settings, a);
+function projectionCard(trades, acct) {
+  if (!acct.a) return '';
+  const s = acct.s;
+  if (!(s.target > 0)) return `<div class="card"><div class="eyebrow">Projection</div><p class="h3" style="margin-top:6px">Add a profit target</p><p class="hint" style="margin-top:8px">Set a profit target in Settings to see how many trading days it could take at your current pace.</p></div>`;
+  const pr = projection(trades, s, acct.a);
   if (!pr) return `<div class="card"><div class="eyebrow">Projection</div><p class="proj-head" style="margin-top:6px">Log 5 trades to see your pace</p><p class="hint" style="margin-top:8px">Projects when you'll hit your profit target from your recent expectancy and how many trades you take per day.</p></div>`;
   const head = pr.days === 0 ? '<em>Target reached</em>' : pr.days != null ? `<em>~${plural(pr.days, 'trading day')}</em> to target` : 'Not on pace for target';
   return `<div class="card gborder"><div class="eyebrow">Projection</div><p class="proj-head" style="margin-top:6px">${head}</p>
@@ -955,7 +990,7 @@ function renderHome() {
           <div class="chart" id="chLast20"></div>
         </div>
       </div>
-      <div class="col">${acct.html}${projectionCard(trades, acct.a)}${todayJournalCard(days)}</div>
+      <div class="col">${acct.html}${projectionCard(trades, acct)}${todayJournalCard(days)}</div>
     </div>
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">Journal</div><h2 class="h2">Recent trades</h2></div>${all.length ? '<a class="link" href="#trades" data-go="trades">All trades</a>' : ''}</div>
@@ -1350,20 +1385,20 @@ function renderSettings() {
         <div class="card-head"><div><div class="eyebrow">Prop account</div><h2 class="h3">Account rules</h2></div></div>
         <div class="field" style="margin-bottom:14px"><span class="lbl">Markets I trade</span><div class="chips">${MARKETS.map(m => `<button type="button" class="chip" data-act="toggle-market" data-m="${m.v}" aria-pressed="${s.markets.includes(m.v)}">${m.l}</button>`).join('')}</div></div>
         <div class="frow" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
-          ${f('st-name', 'Account name', s.accountName, 'type="text" maxlength="60"')}
-          ${f('st-start', 'Starting balance ($)', s.start)}
-          ${f('st-target', 'Profit target ($)', s.target)}
-          ${f('st-dd', 'Max drawdown ($)', s.maxDD)}
+          ${f('st-name', 'Account name', s.accountName, 'type="text" maxlength="60" placeholder="e.g. 50K funded account"')}
+          ${f('st-start', 'Starting balance ($)', s.start || '', 'type="number" inputmode="decimal" step="any" placeholder="e.g. 50000"')}
+          ${f('st-target', 'Profit target ($)', s.target || '', 'type="number" inputmode="decimal" step="any" placeholder="e.g. 3000"')}
+          ${f('st-dd', 'Max drawdown ($)', s.maxDD || '', 'type="number" inputmode="decimal" step="any" placeholder="e.g. 2000"')}
           <div class="field"><label for="st-ddtype">Drawdown type</label><select id="st-ddtype"><option value="trailing" ${s.ddType === 'trailing' ? 'selected' : ''}>End-of-day trailing</option><option value="static" ${s.ddType === 'static' ? 'selected' : ''}>Static</option></select></div>
-          ${f('st-daily', 'Daily loss limit ($)', s.dailyLimit)}
-          ${f('st-risk', 'Default risk per trade ($)', s.riskPerTrade)}
+          ${f('st-daily', 'Daily loss limit ($)', s.dailyLimit || '', 'type="number" inputmode="decimal" step="any" placeholder="Optional"')}
+          ${f('st-risk', 'Default risk per trade ($)', s.riskPerTrade || '', 'type="number" inputmode="decimal" step="any" placeholder="Optional"')}
           ${s.markets.includes('futures') ? f('st-qty', 'Default contracts', s.defaultQty, 'type="number" inputmode="numeric" min="1" step="1"') : ''}
           <div class="field"><label for="st-dmkt">Default market</label><select id="st-dmkt">${MARKETS.filter(m => s.markets.includes(m.v)).map(m => `<option value="${m.v}" ${m.v === s.defaultMarket ? 'selected' : ''}>${m.l}</option>`).join('')}</select></div>
           ${s.markets.includes('futures') ? `<div class="field"><label for="st-sym">Default futures contract</label><select id="st-sym">${s.instruments.filter(i => mktOf(i) === 'futures').map(i => `<option ${i.sym === s.defaultSym ? 'selected' : ''}>${esc(i.sym)}</option>`).join('')}</select></div>` : ''}
           ${s.markets.includes('forex') ? `<div class="field"><label for="st-fx">Default forex pair</label><select id="st-fx">${s.instruments.filter(i => mktOf(i) === 'forex').map(i => `<option ${i.sym === s.defaultFx ? 'selected' : ''}>${esc(i.sym)}</option>`).join('')}</select></div>
           ${f('st-lots', 'Default lot size', s.defaultLots, 'type="number" inputmode="decimal" min="0.01" step="0.01"')}` : ''}
         </div>
-        <p class="hint" style="margin-top:12px">Default risk is used for R-multiples when a trade has no stop price.</p>
+        <p class="hint" style="margin-top:12px">Leave the account fields blank if you don't trade a funded or prop account. Default risk is used for R-multiples when a trade has no stop price.</p>
         <div class="row" style="margin-top:14px"><button class="btn btn-primary" data-act="save-account">Save account rules</button></div>
       </div>
       <div class="card">
@@ -2049,9 +2084,9 @@ document.addEventListener('click', async e => {
     case 'retry-load': if (SITE && Store) { S.loadError = null; renderAll(); loadSiteData(); } else location.reload(); break;
     case 'save-account': {
       const s = S.settings, num = id => { const v = fval(id); return v == null ? 0 : v; };
-      s.accountName = $('#st-name').value.trim() || 'My account';
+      s.accountName = $('#st-name').value.trim();
       s.start = num('st-start'); s.target = num('st-target'); s.maxDD = num('st-dd'); s.ddType = $('#st-ddtype').value;
-      s.dailyLimit = num('st-daily'); s.riskPerTrade = num('st-risk');
+      s.dailyLimit = num('st-daily'); s.riskPerTrade = num('st-risk'); s.accountSet = s.start > 0;
       if ($('#st-qty')) s.defaultQty = Math.max(1, Math.round(num('st-qty')) || 1);
       if ($('#st-sym')) s.defaultSym = $('#st-sym').value;
       if ($('#st-fx')) s.defaultFx = $('#st-fx').value;

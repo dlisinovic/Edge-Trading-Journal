@@ -1,7 +1,7 @@
 {
   "name": "Edge Journal",
   "short_name": "Edge Journal",
-  "description": "Trading journal: P&L by day, week, month and year, with psychology notes on every trade.",
+  "description": "Trading journal for futures and forex: P&L by day, week, month and year, with psychology notes on every trade.",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#040406",

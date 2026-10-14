@@ -1,12 +1,12 @@
 # Edge Journal
 
-A trading journal for futures traders. Log every trade with your reasoning and how you felt, then review your P&L by day, week, month and year to find what's actually making or costing you money.
+A trading journal for futures and forex traders. Log every trade with your reasoning and how you felt, then review your P&L by day, week, month and year to find what's actually making or costing you money.
 
 ## Features
 
 - **Reports** for any day, week, month, year or all time, with comparison to the previous period
 - **P&L calendar** with weekly totals and a year overview
-- **Trade log** with automatic P&L, risk and R-multiple from prices (NQ, MNQ, GC, MGC, ES, CL and more)
+- **Trade log** with automatic P&L, risk and R-multiple from prices, for futures (NQ, MNQ, GC, MGC, ES, CL and more) and forex (contracts or lots, points or pips)
 - **Psychology tracking** on every trade: emotions before, during and after, confidence, stress, plan adherence, mistakes and an execution grade
 - **Mindset insights** showing which emotions, mistakes, setups and sessions cost or make money
 - **Prop account tracker** for profit target, trailing drawdown and daily loss limit, plus a projection to target

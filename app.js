@@ -38,7 +38,7 @@ function moneyK(v, signed) {
 const pct = v => (v == null || !isFinite(v)) ? '—' : Math.round(v * 100) + '%';
 const fmtR = v => isNum(v) ? (v > 0.004 ? '+' : v < -0.004 ? '−' : '') + Math.abs(v).toFixed(2) + 'R' : '—';
 const cls = v => !isNum(v) ? 'flat' : v > 0.004 ? 'pos' : v < -0.004 ? 'neg' : 'flat';
-const fmtPrice = v => isNum(v) ? v.toLocaleString('en-US', {maximumFractionDigits: 4}) : '—';
+const fmtPrice = v => isNum(v) ? v.toLocaleString('en-US', {maximumFractionDigits: 5}) : '—';
 
 /* dates (local time) */
 const pad = n => String(n).padStart(2, '0');
@@ -91,19 +91,31 @@ const ICON = {
    Vocabulary
    ========================================================= */
 const DEFAULT_INSTRUMENTS = [
-  {sym:'NQ', name:'E-mini Nasdaq-100', pv:20, pinned:true},
-  {sym:'MNQ', name:'Micro Nasdaq-100', pv:2, pinned:true},
-  {sym:'GC', name:'Gold', pv:100, pinned:true},
-  {sym:'MGC', name:'Micro Gold', pv:10, pinned:true},
-  {sym:'ES', name:'E-mini S&P 500', pv:50, pinned:false},
-  {sym:'MES', name:'Micro S&P 500', pv:5, pinned:false},
-  {sym:'CL', name:'Crude Oil', pv:1000, pinned:false},
-  {sym:'MCL', name:'Micro Crude Oil', pv:100, pinned:false},
-  {sym:'YM', name:'E-mini Dow', pv:5, pinned:false},
-  {sym:'MYM', name:'Micro Dow', pv:0.5, pinned:false},
-  {sym:'RTY', name:'E-mini Russell 2000', pv:50, pinned:false},
-  {sym:'M2K', name:'Micro Russell 2000', pv:5, pinned:false},
-  {sym:'SI', name:'Silver', pv:5000, pinned:false}
+  {sym:'NQ', name:'E-mini Nasdaq-100', mkt:'futures', pv:20, pinned:true},
+  {sym:'MNQ', name:'Micro Nasdaq-100', mkt:'futures', pv:2, pinned:true},
+  {sym:'GC', name:'Gold', mkt:'futures', pv:100, pinned:true},
+  {sym:'MGC', name:'Micro Gold', mkt:'futures', pv:10, pinned:true},
+  {sym:'ES', name:'E-mini S&P 500', mkt:'futures', pv:50, pinned:false},
+  {sym:'MES', name:'Micro S&P 500', mkt:'futures', pv:5, pinned:false},
+  {sym:'CL', name:'Crude Oil', mkt:'futures', pv:1000, pinned:false},
+  {sym:'MCL', name:'Micro Crude Oil', mkt:'futures', pv:100, pinned:false},
+  {sym:'YM', name:'E-mini Dow', mkt:'futures', pv:5, pinned:false},
+  {sym:'MYM', name:'Micro Dow', mkt:'futures', pv:0.5, pinned:false},
+  {sym:'RTY', name:'E-mini Russell 2000', mkt:'futures', pv:50, pinned:false},
+  {sym:'M2K', name:'Micro Russell 2000', mkt:'futures', pv:5, pinned:false},
+  {sym:'SI', name:'Silver', mkt:'futures', pv:5000, pinned:false},
+  {sym:'EURUSD', name:'Euro / US Dollar', mkt:'forex', lot:100000, pip:0.0001, pinned:true},
+  {sym:'GBPUSD', name:'British Pound / US Dollar', mkt:'forex', lot:100000, pip:0.0001, pinned:true},
+  {sym:'USDJPY', name:'US Dollar / Japanese Yen', mkt:'forex', lot:100000, pip:0.01, pinned:true},
+  {sym:'XAUUSD', name:'Gold / US Dollar', mkt:'forex', lot:100, pip:0.1, pinned:true},
+  {sym:'AUDUSD', name:'Australian Dollar / US Dollar', mkt:'forex', lot:100000, pip:0.0001, pinned:false},
+  {sym:'NZDUSD', name:'New Zealand Dollar / US Dollar', mkt:'forex', lot:100000, pip:0.0001, pinned:false},
+  {sym:'USDCAD', name:'US Dollar / Canadian Dollar', mkt:'forex', lot:100000, pip:0.0001, pinned:false},
+  {sym:'USDCHF', name:'US Dollar / Swiss Franc', mkt:'forex', lot:100000, pip:0.0001, pinned:false},
+  {sym:'EURJPY', name:'Euro / Japanese Yen', mkt:'forex', lot:100000, pip:0.01, pinned:false},
+  {sym:'GBPJPY', name:'British Pound / Japanese Yen', mkt:'forex', lot:100000, pip:0.01, pinned:false},
+  {sym:'EURGBP', name:'Euro / British Pound', mkt:'forex', lot:100000, pip:0.0001, pinned:false},
+  {sym:'XAGUSD', name:'Silver / US Dollar', mkt:'forex', lot:5000, pip:0.01, pinned:false}
 ];
 const DEFAULT_SETUPS = ['Liquidity sweep','Breakout','Pullback','Reversal','Opening range','VWAP reclaim','Indicator signal','Trend continuation'];
 const EMO_BEFORE = ['Calm','Focused','Confident','Patient','Excited','Anxious','FOMO','Impatient','Bored','Revenge','Greedy','Tired','Distracted','Fearful'];
@@ -122,12 +134,16 @@ const PLAN_OPTS = [{v:'yes', l:'Yes'}, {v:'partly', l:'Partly'}, {v:'no', l:'No'
 const PLAN_LABEL = {yes:'Followed plan', partly:'Partly followed', no:'Broke plan', mostly:'Mostly followed'};
 const READY_OPTS = [{v:'yes', l:'Yes'}, {v:'unsure', l:'Unsure'}, {v:'no', l:'No'}];
 const tone = v => GOOD.has(v) ? 'good' : BAD.has(v) ? 'bad' : '';
+const MARKETS = [{v: 'futures', l: 'Futures'}, {v: 'forex', l: 'Forex'}];
+const mktOf = i => !i ? null : (i.mkt || (i.pip ? 'forex' : 'futures'));
+const qtyWord = (m, n) => m === 'forex' ? `${n} lot${Number(n) === 1 ? '' : 's'}` : plural(n, 'contract');
 
 function defaultSettings() {
   return {
     kind: 'settings', accountName: 'LucidFlex 25K',
     start: 25000, target: 1250, maxDD: 1000, ddType: 'trailing', dailyLimit: 600,
     riskPerTrade: 600, defaultQty: 1, defaultSym: 'NQ',
+    markets: ['futures', 'forex'], defaultMarket: 'futures', defaultFx: 'EURUSD', defaultLots: 1, fxAdded: true,
     instruments: DEFAULT_INSTRUMENTS.map(i => Object.assign({}, i)),
     setups: DEFAULT_SETUPS.slice()
   };
@@ -136,6 +152,15 @@ function mergeSettings(s) {
   const out = Object.assign(defaultSettings(), s || {});
   if (!Array.isArray(out.instruments) || !out.instruments.length) out.instruments = defaultSettings().instruments;
   if (!Array.isArray(out.setups)) out.setups = DEFAULT_SETUPS.slice();
+  if (!out.fxAdded) {
+    const have = new Set(out.instruments.map(i => i.sym));
+    DEFAULT_INSTRUMENTS.filter(i => i.mkt === 'forex' && !have.has(i.sym)).forEach(i => out.instruments.push(Object.assign({}, i)));
+    out.fxAdded = true;
+  }
+  out.instruments.forEach(i => { if (!i.mkt) i.mkt = i.pip ? 'forex' : 'futures'; });
+  if (!Array.isArray(out.markets) || !out.markets.length) out.markets = ['futures', 'forex'];
+  if (!out.markets.includes(out.defaultMarket)) out.defaultMarket = out.markets[0];
+  out.defaultLots = Number(out.defaultLots) || 1;
   ['start','target','maxDD','dailyLimit','riskPerTrade','defaultQty'].forEach(k => { out[k] = Number(out[k]) || 0; });
   return out;
 }
@@ -381,6 +406,8 @@ const S = {
 let Store = null;
 const data = () => S.previewOn ? S.sample : {trades: S.trades, days: S.days};
 const inst = sym => S.settings.instruments.find(i => i.sym === sym);
+const tradeMkt = t => t.market || mktOf(inst(t.sym)) || 'futures';
+const defaultSymFor = m => m === 'forex' ? (S.settings.defaultFx || 'EURUSD') : (S.settings.defaultSym || 'NQ');
 
 function routeKey(g, anchor) {
   if (g === 'day') return anchor;
@@ -873,7 +900,10 @@ function renderHome() {
   const name = firstName();
   const welcome = (!trades.length && !S.previewOn) ? `<div class="card welcome gborder">
       <div><div class="eyebrow">Welcome</div><h2 class="h2">Start your trading journal</h2><p>Log each trade with why you took it and how you felt. After a couple of weeks, the Mindset tab shows which emotions, mistakes and setups make or cost you money.</p></div>
-      <div class="row"><button class="btn btn-primary" data-act="log">Log a trade</button><button class="btn" data-act="open-day" data-date="${t}">Write today's plan</button><button class="btn btn-ghost" data-act="show-sample">See a sample</button></div>
+      <div style="display:grid;gap:10px">
+        <div class="row"><span class="small">What do you trade?</span><div class="seg" role="group" aria-label="What do you trade">${[['futures', 'Futures'], ['forex', 'Forex'], ['both', 'Both']].map(([v, l]) => { const cur = S.settings.markets.length > 1 ? 'both' : S.settings.markets[0]; return `<button type="button" class="chip" data-act="set-markets" data-m="${v}" aria-pressed="${cur === v}">${l}</button>`; }).join('')}</div></div>
+        <div class="row"><button class="btn btn-primary" data-act="log">Log a trade</button><button class="btn" data-act="open-day" data-date="${t}">Write today's plan</button><button class="btn btn-ghost" data-act="show-sample">See a sample</button></div>
+      </div>
     </div>` : '';
   const pcard = x => {
     const vals = x.p.id === 'today' ? x.st.sorted.map(y => y.pnl) : [...x.st.byDay.values()];
@@ -1317,6 +1347,7 @@ function renderSettings() {
       ${accountCardHtml}
       <div class="card">
         <div class="card-head"><div><div class="eyebrow">Prop account</div><h2 class="h3">Account rules</h2></div></div>
+        <div class="field" style="margin-bottom:14px"><span class="lbl">Markets I trade</span><div class="chips">${MARKETS.map(m => `<button type="button" class="chip" data-act="toggle-market" data-m="${m.v}" aria-pressed="${s.markets.includes(m.v)}">${m.l}</button>`).join('')}</div></div>
         <div class="frow" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
           ${f('st-name', 'Account name', s.accountName, 'type="text" maxlength="60"')}
           ${f('st-start', 'Starting balance ($)', s.start)}
@@ -1325,8 +1356,11 @@ function renderSettings() {
           <div class="field"><label for="st-ddtype">Drawdown type</label><select id="st-ddtype"><option value="trailing" ${s.ddType === 'trailing' ? 'selected' : ''}>End-of-day trailing</option><option value="static" ${s.ddType === 'static' ? 'selected' : ''}>Static</option></select></div>
           ${f('st-daily', 'Daily loss limit ($)', s.dailyLimit)}
           ${f('st-risk', 'Default risk per trade ($)', s.riskPerTrade)}
-          ${f('st-qty', 'Default contracts', s.defaultQty, 'type="number" inputmode="numeric" min="1" step="1"')}
-          <div class="field"><label for="st-sym">Default instrument</label><select id="st-sym">${s.instruments.map(i => `<option ${i.sym === s.defaultSym ? 'selected' : ''}>${esc(i.sym)}</option>`).join('')}</select></div>
+          ${s.markets.includes('futures') ? f('st-qty', 'Default contracts', s.defaultQty, 'type="number" inputmode="numeric" min="1" step="1"') : ''}
+          <div class="field"><label for="st-dmkt">Default market</label><select id="st-dmkt">${MARKETS.filter(m => s.markets.includes(m.v)).map(m => `<option value="${m.v}" ${m.v === s.defaultMarket ? 'selected' : ''}>${m.l}</option>`).join('')}</select></div>
+          ${s.markets.includes('futures') ? `<div class="field"><label for="st-sym">Default futures contract</label><select id="st-sym">${s.instruments.filter(i => mktOf(i) === 'futures').map(i => `<option ${i.sym === s.defaultSym ? 'selected' : ''}>${esc(i.sym)}</option>`).join('')}</select></div>` : ''}
+          ${s.markets.includes('forex') ? `<div class="field"><label for="st-fx">Default forex pair</label><select id="st-fx">${s.instruments.filter(i => mktOf(i) === 'forex').map(i => `<option ${i.sym === s.defaultFx ? 'selected' : ''}>${esc(i.sym)}</option>`).join('')}</select></div>
+          ${f('st-lots', 'Default lot size', s.defaultLots, 'type="number" inputmode="decimal" min="0.01" step="0.01"')}` : ''}
         </div>
         <p class="hint" style="margin-top:12px">Default risk is used for R-multiples when a trade has no stop price.</p>
         <div class="row" style="margin-top:14px"><button class="btn btn-primary" data-act="save-account">Save account rules</button></div>
@@ -1337,20 +1371,25 @@ function renderSettings() {
         <div class="row" style="margin-top:12px;flex-wrap:nowrap"><input id="st-newsetup" type="text" placeholder="Add a setup, e.g. London breakout" maxlength="40"><button class="btn" data-act="add-setup">Add</button></div>
       </div>
       <div class="card">
-        <div class="card-head"><div><div class="eyebrow">Contracts</div><h2 class="h3">Instruments</h2></div><span class="hint">Pinned ones show as quick picks when logging</span></div>
+        <div class="card-head"><div><div class="eyebrow">Contracts &amp; pairs</div><h2 class="h3">Instruments</h2></div><span class="hint">Pinned ones show as quick picks when logging</span></div>
         <div class="inst-wrap"><table class="inst-table">
-          <thead><tr><th>Symbol</th><th>Name</th><th>$ per point</th><th>Pinned</th><th></th></tr></thead>
-          <tbody>${s.instruments.map((i, k) => `<tr>
-            <td class="sym">${esc(i.sym)}</td><td>${esc(i.name || '')}</td>
-            <td><input type="number" step="any" inputmode="decimal" data-inst-pv="${k}" value="${esc(i.pv)}" aria-label="${esc(i.sym)} dollars per point" style="width:96px"></td>
+          <thead><tr><th>Symbol</th><th>Name</th><th>Value</th><th>Pinned</th><th></th></tr></thead>
+          <tbody>${s.instruments.map((i, k) => s.markets.includes(mktOf(i)) ? `<tr>
+            <td class="sym">${esc(i.sym)}<div class="hint">${mktOf(i) === 'forex' ? 'Forex' : 'Futures'}</div></td><td>${esc(i.name || '')}</td>
+            <td>${mktOf(i) === 'forex'
+              ? `<div class="row" style="flex-wrap:nowrap;gap:6px"><label class="hint" for="ilot${k}">Lot</label><input id="ilot${k}" type="number" step="any" inputmode="decimal" data-inst-lot="${k}" value="${esc(i.lot)}" style="width:96px"><label class="hint" for="ipip${k}">Pip</label><input id="ipip${k}" type="number" step="any" inputmode="decimal" data-inst-pip="${k}" value="${esc(i.pip)}" style="width:84px"></div>`
+              : `<div class="row" style="flex-wrap:nowrap;gap:6px"><label class="hint" for="ipv${k}">$/pt</label><input id="ipv${k}" type="number" step="any" inputmode="decimal" data-inst-pv="${k}" value="${esc(i.pv)}" style="width:96px"></div>`}</td>
             <td><input type="checkbox" data-inst-pin="${k}" ${i.pinned ? 'checked' : ''} aria-label="Pin ${esc(i.sym)}"></td>
             <td><button class="btn btn-ghost btn-sm" data-act="remove-inst" data-i="${k}" aria-label="Remove ${esc(i.sym)}">Remove</button></td>
-          </tr>`).join('')}</tbody>
+          </tr>` : '').join('')}</tbody>
         </table></div>
         <div class="frow" style="margin-top:12px;align-items:end">
-          <div class="field"><label for="st-isym">Symbol</label><input id="st-isym" type="text" maxlength="8" placeholder="PL"></div>
-          <div class="field"><label for="st-iname">Name</label><input id="st-iname" type="text" maxlength="40" placeholder="Platinum"></div>
-          <div class="field"><label for="st-ipv">$ per point</label><input id="st-ipv" type="number" step="any" inputmode="decimal" placeholder="50"></div>
+          <div class="field"><label for="st-imkt">Market</label><select id="st-imkt">${MARKETS.filter(m => s.markets.includes(m.v)).map(m => `<option value="${m.v}">${m.l}</option>`).join('')}</select></div>
+          <div class="field"><label for="st-isym">Symbol</label><input id="st-isym" type="text" maxlength="8" placeholder="${s.markets[0] === 'forex' ? 'AUDJPY' : 'PL'}"></div>
+          <div class="field"><label for="st-iname">Name</label><input id="st-iname" type="text" maxlength="40" placeholder="${s.markets[0] === 'forex' ? 'Aussie / Yen' : 'Platinum'}"></div>
+          <div class="field" id="st-ifut" ${s.markets[0] === 'futures' ? '' : 'hidden'}><label for="st-ipv">$ per point</label><input id="st-ipv" type="number" step="any" inputmode="decimal" placeholder="50"></div>
+          <div class="field" id="st-ifx" ${s.markets[0] === 'forex' ? '' : 'hidden'}><label for="st-ipip">Pip size</label><input id="st-ipip" type="number" step="any" inputmode="decimal" placeholder="0.0001 (0.01 for JPY)"></div>
+          <div class="field" id="st-ifx2" ${s.markets[0] === 'forex' ? '' : 'hidden'}><label for="st-ilot">Units per lot</label><input id="st-ilot" type="number" step="any" inputmode="decimal" placeholder="100000"></div>
           <button class="btn" data-act="add-inst">Add instrument</button>
         </div>
       </div>
@@ -1389,10 +1428,8 @@ function renderAll() {
    ========================================================= */
 function openTradeForm(t, presetDate) {
   const s = S.settings, isEdit = !!t;
-  t = t || {date: presetDate || todayStr(), sym: s.defaultSym, side: 'long', qty: s.defaultQty, fees: 0};
-  const pinned = s.instruments.filter(i => i.pinned).map(i => i.sym);
-  if (t.sym && !pinned.includes(t.sym) && !s.instruments.some(i => i.sym === t.sym)) pinned.push(t.sym);
-  const others = s.instruments.filter(i => !pinned.includes(i.sym));
+  const market = (t && (t.market || mktOf(inst(t.sym)))) || (s.markets.includes(s.defaultMarket) ? s.defaultMarket : s.markets[0]) || 'futures';
+  t = t || {date: presetDate || todayStr(), sym: defaultSymFor(market), side: 'long', qty: market === 'forex' ? s.defaultLots : s.defaultQty, fees: 0};
   const setupOpts = [...s.setups];
   const setupIsOther = t.setup && !setupOpts.includes(t.setup);
   const v = x => x == null ? '' : esc(x);
@@ -1411,13 +1448,11 @@ function openTradeForm(t, presetDate) {
         <div class="field"><label for="tf-in">Entry time</label><input id="tf-in" type="time" value="${v(t.entryTime)}"></div>
         <div class="field"><label for="tf-out">Exit time</label><input id="tf-out" type="time" value="${v(t.exitTime)}"></div>
       </div>
-      <div class="field"><span class="lbl">Instrument</span>
-        <div class="row">${chipGroup('sym', pinned, pinned.includes(t.sym) ? t.sym : null, {label: 'Instrument'})}
-        ${others.length ? `<select id="tf-sym-other" aria-label="Other instrument" style="width:auto;min-width:120px"><option value="">More…</option>${others.map(i => `<option value="${esc(i.sym)}" ${i.sym === t.sym ? 'selected' : ''}>${esc(i.sym)} · ${esc(i.name || '')}</option>`).join('')}</select>` : ''}</div>
-      </div>
+      <div class="field" ${s.markets.length > 1 || market !== s.markets[0] ? '' : 'hidden'}><span class="lbl">Market</span><div>${chipGroup('market', MARKETS, market, {cls: 'seg', label: 'Market'})}</div></div>
+      <div class="field"><span class="lbl">Instrument</span><div id="tf-symbox">${symPicker(market, t.sym)}</div></div>
       <div class="frow">
         <div class="field"><span class="lbl">Direction</span><div>${chipGroup('side', [{v: 'long', l: 'Long'}, {v: 'short', l: 'Short'}], t.side || 'long', {cls: 'seg', label: 'Direction'})}</div></div>
-        <div class="field"><label for="tf-qty">Contracts</label><input id="tf-qty" type="number" inputmode="numeric" min="1" step="1" value="${v(t.qty)}"></div>
+        <div class="field"><label for="tf-qty" id="tf-qty-label">${market === 'forex' ? 'Lots' : 'Contracts'}</label><input id="tf-qty" type="number" inputmode="decimal" min="${market === 'forex' ? '0.01' : '1'}" step="${market === 'forex' ? '0.01' : '1'}" value="${v(t.qty)}"></div>
         <div class="field"><label for="tf-fees">Fees &amp; commission ($)</label><input id="tf-fees" type="number" inputmode="decimal" step="any" value="${v(t.fees)}" placeholder="0"></div>
       </div>
       <div class="frow">
@@ -1483,11 +1518,47 @@ function formSym() {
   const chip = readChips($('#sheet'), 'sym'), other = $('#tf-sym-other');
   return chip || (other && other.value) || null;
 }
+function symPicker(market, sym) {
+  const list = S.settings.instruments.filter(i => mktOf(i) === market);
+  const pinned = list.filter(i => i.pinned).map(i => i.sym);
+  if (sym && !pinned.includes(sym) && !list.some(i => i.sym === sym)) pinned.push(sym);
+  const others = list.filter(i => !pinned.includes(i.sym));
+  return `<div class="row">${chipGroup('sym', pinned, pinned.includes(sym) ? sym : null, {label: 'Instrument'})}
+    ${others.length ? `<select id="tf-sym-other" aria-label="Other instrument" style="width:auto;min-width:120px"><option value="">More…</option>${others.map(i => `<option value="${esc(i.sym)}" ${i.sym === sym ? 'selected' : ''}>${esc(i.sym)} · ${esc(i.name || '')}</option>`).join('')}</select>` : ''}</div>`;
+}
+function switchMarket(m, sym) {
+  const root = $('#sheet');
+  const g = $('[data-field="market"]', root);
+  if (g) $$('.chip', g).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === m)));
+  $('#tf-symbox').innerHTML = symPicker(m, sym || defaultSymFor(m));
+  $('#tf-qty-label').textContent = m === 'forex' ? 'Lots' : 'Contracts';
+  const q = $('#tf-qty');
+  q.min = q.step = m === 'forex' ? '0.01' : '1';
+  q.value = m === 'forex' ? (S.settings.defaultLots || 1) : (S.settings.defaultQty || 1);
+  updateCalc();
+}
 function formCalc() {
-  const root = $('#sheet'), i = inst(formSym()), pv = i ? Number(i.pv) : null;
+  const root = $('#sheet'), sym = formSym() || '', i = inst(sym);
+  const m = mktOf(i) || readChips(root, 'market') || 'futures';
   const dir = (readChips(root, 'side') || 'long') === 'short' ? -1 : 1;
   const e = fval('tf-entry'), x = fval('tf-exit'), st = fval('tf-stop'), tg = fval('tf-target'), q = fval('tf-qty') || 0, fees = fval('tf-fees') || 0;
-  const out = {points: null, gross: null, net: null, risk: null, reward: null};
+  const out = {market: m, points: null, gross: null, net: null, risk: null, reward: null, cross: false};
+  if (m === 'forex') {
+    // value in the quote currency, converted to dollars when the pair includes USD
+    const lot = (i && Number(i.lot)) || 100000, pip = (i && Number(i.pip)) || (sym.endsWith('JPY') ? 0.01 : 0.0001);
+    const base = sym.slice(0, 3), quote = sym.slice(3, 6);
+    const usd = (amt, px) => quote === 'USD' ? amt : (base === 'USD' && px ? amt / px : null);
+    if (!q) return out;
+    if (e != null && x != null) {
+      out.points = (x - e) * dir / pip;
+      const g = usd((x - e) * dir * q * lot, x);
+      if (g != null) { out.gross = g; out.net = round2(g - fees); } else out.cross = true;
+    }
+    if (e != null && st != null) out.risk = usd(Math.abs(e - st) * q * lot, st);
+    if (e != null && tg != null) out.reward = usd(Math.abs(tg - e) * q * lot, tg);
+    return out;
+  }
+  const pv = i ? Number(i.pv) : null;
   if (pv && q) {
     if (e != null && x != null) { out.points = (x - e) * dir; out.gross = out.points * pv * q; out.net = round2(out.gross - fees); }
     if (e != null && st != null) out.risk = Math.abs(e - st) * pv * q;
@@ -1500,11 +1571,13 @@ function updateCalc() {
   if (!pnlEl || !box) return;
   const c = formCalc();
   if (pnlEl.dataset.auto === '1') pnlEl.value = c.net != null ? String(c.net) : '';
-  $('#tf-pnl-hint').textContent = pnlEl.dataset.auto === '1' ? 'Calculated from prices minus fees. Type to override.' : 'Manual P&L. Clear the box to go back to the calculated value.';
+  $('#tf-pnl-hint').textContent = pnlEl.dataset.auto !== '1' ? 'Manual P&L. Clear the box to go back to the calculated value.'
+    : c.cross ? "This pair doesn't include USD, so type your P&L in dollars from your platform."
+    : 'Calculated from prices minus fees. Type to override.';
   const pnl = fval('tf-pnl'), risk = c.risk || S.settings.riskPerTrade || null;
   const r = pnl != null && risk ? pnl / risk : null;
   const parts = [];
-  if (c.points != null) parts.push(`Pts <b>${c.points > 0 ? '+' : ''}${round2(c.points)}</b>`);
+  if (c.points != null) parts.push(`${c.market === 'forex' ? 'Pips' : 'Pts'} <b>${c.points > 0 ? '+' : ''}${c.market === 'forex' ? Math.round(c.points * 10) / 10 : round2(c.points)}</b>`);
   if (c.risk != null) parts.push(`Risk <b>${money(c.risk, {sign: false})}</b>`);
   if (c.risk && c.reward) parts.push(`Plan R:R <b>${(c.reward / c.risk).toFixed(2)}</b>`);
   parts.push(`Net <b class="${cls(pnl)}">${pnl != null ? money(pnl) : '—'}</b>`);
@@ -1533,7 +1606,7 @@ async function saveTradeForm() {
   const trade = {
     kind: 'trade', date,
     entryTime: $('#tf-in').value || null, exitTime: $('#tf-out').value || null,
-    sym, side: readChips(root, 'side') || 'long', qty: fval('tf-qty'),
+    sym, market: c.market, side: readChips(root, 'side') || 'long', qty: fval('tf-qty'),
     entry: fval('tf-entry'), exit: fval('tf-exit'), stop: fval('tf-stop'), target: fval('tf-target'),
     fees: fval('tf-fees') || 0, pnl: round2(pnl),
     risk: risk ? round2(risk) : null, r: risk ? round2(pnl / risk) : null,
@@ -1562,6 +1635,7 @@ async function saveTradeForm() {
 function prefillFromTemplate(c) {
   const root = $('#sheet');
   const press = (field, val) => { const g = $(`[data-field="${field}"]`, root); if (!g) return; $$('.chip', g).forEach(x => x.setAttribute('aria-pressed', String([].concat(val || []).map(String).includes(x.dataset.v)))); };
+  switchMarket(tradeMkt(c), c.sym);
   press('sym', c.sym);
   const o = $('#tf-sym-other');
   if (o && !$('[data-field="sym"] .chip[aria-pressed="true"]', root)) o.value = c.sym || '';
@@ -1579,7 +1653,9 @@ function openTradeDetail(id) {
   if (!t) return;
   const fact = (k, val) => `<div><dt>${k}</dt><dd>${val}</dd></div>`;
   const i = inst(t.sym);
-  const pts = isNum(t.entry) && isNum(t.exit) ? round2((t.exit - t.entry) * (t.side === 'short' ? -1 : 1)) : null;
+  const mk = tradeMkt(t), pip = (i && Number(i.pip)) || 0.0001;
+  const mv = isNum(t.entry) && isNum(t.exit) ? (t.exit - t.entry) * (t.side === 'short' ? -1 : 1) : null;
+  const pts = mv == null ? null : mk === 'forex' ? Math.round(mv / pip * 10) / 10 : round2(mv);
   const dots = n => `<span class="dots" aria-label="${n} of 5">${[1, 2, 3, 4, 5].map(k => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</span>`;
   const qa = (q, a) => a ? `<div><div class="qlabel">${q}</div><p class="quote">${esc(a)}</p></div>` : '';
   const dayRoute = repRoute('day', t.date);
@@ -1587,10 +1663,10 @@ function openTradeDetail(id) {
       <h2 class="h2" id="sheetTitle">${esc(t.sym)} <span class="side ${t.side === 'short' ? 'short' : 'long'}">${t.side === 'short' ? 'Short' : 'Long'}</span>${t.sample ? ' <span class="pill">Sample</span>' : ''}</h2></div>
       <button class="icon-btn" data-act="close" aria-label="Close">×</button></div>
     <div class="sheet-body">
-      <div class="detail-hero"><div><div class="num huge ${cls(t.pnl)}">${money(t.pnl)}</div><div class="hint" style="margin-top:6px">${i ? esc(i.name) : esc(t.sym)}${t.qty ? ' · ' + plural(t.qty, 'contract') : ''} · <a href="#${dayRoute}" data-go="${dayRoute}">View this day</a></div></div>
+      <div class="detail-hero"><div><div class="num huge ${cls(t.pnl)}">${money(t.pnl)}</div><div class="hint" style="margin-top:6px">${i ? esc(i.name) : esc(t.sym)}${t.qty ? ' · ' + qtyWord(mk, t.qty) : ''} · <a href="#${dayRoute}" data-go="${dayRoute}">View this day</a></div></div>
         <div class="row">${isNum(t.r) ? `<span class="pill ${t.r > 0 ? 'good' : t.r < 0 ? 'bad' : ''}">${fmtR(t.r)}</span>` : ''}${t.followedPlan ? `<span class="pill ${t.followedPlan === 'yes' ? 'good' : t.followedPlan === 'no' ? 'bad' : 'mid'}">${PLAN_LABEL[t.followedPlan]}</span>` : ''}${t.grade ? `<span class="grade g-${t.grade}" title="Execution grade">${t.grade}</span>` : ''}</div></div>
       <dl class="facts">
-        ${fact('Entry', fmtPrice(t.entry))}${fact('Exit', fmtPrice(t.exit))}${fact('Points', pts == null ? '—' : (pts > 0 ? '+' : '') + pts)}
+        ${fact('Entry', fmtPrice(t.entry))}${fact('Exit', fmtPrice(t.exit))}${fact(mk === 'forex' ? 'Pips' : 'Points', pts == null ? '—' : (pts > 0 ? '+' : '') + pts)}
         ${fact('Stop', fmtPrice(t.stop))}${fact('Target', fmtPrice(t.target))}${fact('Risk', t.risk ? money(t.risk, {sign: false}) : '—')}
         ${fact('Session', esc(t.session || '—'))}${fact('Timeframe', esc(t.timeframe || '—'))}${fact('Fees', money(t.fees || 0, {sign: false}))}
       </dl>
@@ -1694,9 +1770,9 @@ function downloadText(filename, text) {
 }
 function offerFile(filename, text) { downloadText(filename, text); toast('Export downloaded'); }
 function toCSV(trades) {
-  const cols = ['date','entryTime','exitTime','sym','side','qty','entry','exit','stop','target','fees','pnl','r','session','setup','timeframe','confluences','origin','reason','emoBefore','emoDuring','emoAfter','confidence','stress','ready','followedPlan','mistakes','exitReason','wentWell','differently','lesson','grade','chartUrl'];
+  const cols = ['date','entryTime','exitTime','market','sym','side','qty','entry','exit','stop','target','fees','pnl','r','session','setup','timeframe','confluences','origin','reason','emoBefore','emoDuring','emoAfter','confidence','stress','ready','followedPlan','mistakes','exitReason','wentWell','differently','lesson','grade','chartUrl'];
   const cell = v => { if (v == null) return ''; if (Array.isArray(v)) v = v.join('; '); const s = String(v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  return [cols.join(',')].concat(trades.map(t => cols.map(c => cell(t[c])).join(','))).join('\n');
+  return [cols.join(',')].concat(trades.map(t => cols.map(c => cell(c === 'market' ? tradeMkt(t) : t[c])).join(','))).join('\n');
 }
 async function runImport() {
   const d = S.importData;
@@ -1818,7 +1894,7 @@ function renderAuth() {
   el.innerHTML = `<section class="auth-art">
       <div class="brand" style="font-size:22px">${logoSvg('ejg-auth')}<span>Edge<b>Journal</b></span></div>
       <div><h1>Find what's <em>costing you</em> money.</h1>
-        <p>Log every trade with why you took it and how you felt. Edge Journal shows your P&amp;L by day, week, month and year, and which emotions and mistakes cost you the most.</p></div>
+        <p>Built for futures and forex traders. Log every trade with why you took it and how you felt. Edge Journal shows your P&amp;L by day, week, month and year, and which emotions and mistakes cost you the most.</p></div>
       ${authArt()}
       <ul class="auth-points"><li>Daily, weekly, monthly and yearly reports</li><li>Psychology questions on every trade</li><li>Prop account tracker with drawdown and daily loss limits</li></ul>
     </section>
@@ -1917,6 +1993,7 @@ document.addEventListener('click', async e => {
   if (chip && !chip.closest('fieldset:disabled')) {
     const g = chip.closest('.chips');
     const on = chip.getAttribute('aria-pressed') === 'true';
+    if (g.dataset.field === 'market') { if (!on) switchMarket(chip.dataset.v); return; }
     if (g.dataset.multi !== '1') $$('.chip', g).forEach(b => b.setAttribute('aria-pressed', 'false'));
     chip.setAttribute('aria-pressed', String(!on));
     if (g.dataset.field === 'sym') { const o = $('#tf-sym-other'); if (o) o.value = ''; }
@@ -1973,7 +2050,12 @@ document.addEventListener('click', async e => {
       const s = S.settings, num = id => { const v = fval(id); return v == null ? 0 : v; };
       s.accountName = $('#st-name').value.trim() || 'My account';
       s.start = num('st-start'); s.target = num('st-target'); s.maxDD = num('st-dd'); s.ddType = $('#st-ddtype').value;
-      s.dailyLimit = num('st-daily'); s.riskPerTrade = num('st-risk'); s.defaultQty = Math.max(1, Math.round(num('st-qty')) || 1); s.defaultSym = $('#st-sym').value;
+      s.dailyLimit = num('st-daily'); s.riskPerTrade = num('st-risk');
+      if ($('#st-qty')) s.defaultQty = Math.max(1, Math.round(num('st-qty')) || 1);
+      if ($('#st-sym')) s.defaultSym = $('#st-sym').value;
+      if ($('#st-fx')) s.defaultFx = $('#st-fx').value;
+      if ($('#st-lots')) s.defaultLots = Math.max(0.01, num('st-lots') || 1);
+      if ($('#st-dmkt')) s.defaultMarket = $('#st-dmkt').value;
       await saveSettings(); renderAll(); break;
     }
     case 'add-setup': {
@@ -1984,13 +2066,33 @@ document.addEventListener('click', async e => {
     }
     case 'remove-setup': S.settings.setups.splice(Number(b.dataset.i), 1); await saveSettings(true); renderAll(); break;
     case 'add-inst': {
-      const sym = $('#st-isym').value.trim().toUpperCase(), name = $('#st-iname').value.trim(), pv = fval('st-ipv');
-      if (!sym || !/^[A-Z0-9]{1,8}$/.test(sym)) { toast('Enter a symbol using letters and numbers, like MCL.', 'bad'); break; }
-      if (!pv || pv <= 0) { toast('Enter the dollar value of one full point for ' + sym + '.', 'bad'); break; }
+      const mk = $('#st-imkt').value, sym = $('#st-isym').value.trim().toUpperCase(), name = $('#st-iname').value.trim();
+      if (!sym || !/^[A-Z0-9]{1,8}$/.test(sym)) { toast(`Enter a symbol using letters and numbers, like ${mk === 'forex' ? 'AUDJPY' : 'MCL'}.`, 'bad'); break; }
+      let rec;
+      if (mk === 'forex') {
+        rec = {sym, name, mkt: 'forex', lot: fval('st-ilot') || 100000, pip: fval('st-ipip') || (sym.endsWith('JPY') ? 0.01 : 0.0001), pinned: true};
+      } else {
+        const pv = fval('st-ipv');
+        if (!pv || pv <= 0) { toast('Enter the dollar value of one full point for ' + sym + '.', 'bad'); break; }
+        rec = {sym, name, mkt: 'futures', pv, pinned: true};
+      }
       const ex = inst(sym);
-      if (ex) { ex.pv = pv; if (name) ex.name = name; ex.pinned = true; }
-      else S.settings.instruments.push({sym, name, pv, pinned: true});
+      if (ex) { Object.assign(ex, rec, {name: name || ex.name}); }
+      else S.settings.instruments.push(rec);
       await saveSettings(true); toast(sym + ' added'); renderAll(); break;
+    }
+    case 'toggle-market': {
+      const st = S.settings, set = new Set(st.markets), m = b.dataset.m;
+      if (set.has(m)) { if (set.size === 1) { toast('Keep at least one market.', 'bad'); break; } set.delete(m); } else set.add(m);
+      st.markets = MARKETS.map(x => x.v).filter(v => set.has(v));
+      if (!st.markets.includes(st.defaultMarket)) st.defaultMarket = st.markets[0];
+      await saveSettings(true); renderAll(); break;
+    }
+    case 'set-markets': {
+      const st = S.settings, m = b.dataset.m;
+      st.markets = m === 'both' ? ['futures', 'forex'] : [m];
+      st.defaultMarket = m === 'both' ? (st.defaultMarket || 'futures') : m;
+      await saveSettings(true); renderAll(); break;
     }
     case 'remove-inst': {
       const k = Number(b.dataset.i), sym = S.settings.instruments[k] && S.settings.instruments[k].sym;
@@ -2077,6 +2179,16 @@ document.addEventListener('change', async e => {
   if (t.id === 'tf-sym-other') {
     if (t.value) { const g = $('[data-field="sym"]', $('#sheet')); if (g) $$('.chip', g).forEach(b => b.setAttribute('aria-pressed', 'false')); }
     updateCalc(); return;
+  }
+  if (t.dataset.instLot != null || t.dataset.instPip != null) {
+    const k = Number(t.dataset.instLot != null ? t.dataset.instLot : t.dataset.instPip), i = S.settings.instruments[k], v = Number(t.value);
+    if (i && v > 0) { if (t.dataset.instLot != null) i.lot = v; else i.pip = v; await saveSettings(true); toast(`${i.sym} updated`); }
+    return;
+  }
+  if (t.id === 'st-imkt') {
+    const fx = t.value === 'forex';
+    $('#st-ifut').hidden = fx; $('#st-ifx').hidden = !fx; $('#st-ifx2').hidden = !fx;
+    return;
   }
   if (t.dataset.instPv != null) {
     const i = S.settings.instruments[Number(t.dataset.instPv)], v = Number(t.value);

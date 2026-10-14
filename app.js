@@ -1,12 +1,8 @@
-/* Edge Journal — app script.
-   Runs in two places from the same code:
-   - backend 'supabase': the public website (accounts via Supabase Auth, data in Supabase Postgres)
-   - backend 'claude':   the private Claude artifact (data in the artifact's per-user store)
-   Everything except the Store adapters and the sign-in screen is shared. */
+/* Edge Journal — trading journal. Sign-in via Supabase Auth, data in Supabase Postgres. */
 (() => {
 'use strict';
-const CFG = Object.assign({backend: 'claude', appName: 'Edge Journal', authProviders: ['google'], emailAuth: false, supportEmail: ''}, window.EJ_CONFIG || {});
-const SITE = CFG.backend === 'supabase';
+const CFG = Object.assign({backend: 'supabase', appName: 'Edge Journal', authProviders: ['google'], emailAuth: false, supportEmail: ''}, window.EJ_CONFIG || {});
+const SITE = true;
 
 /* =========================================================
    Helpers
@@ -158,68 +154,6 @@ function partition(entries) {
   return out;
 }
 
-/* Claude artifact: each viewer's private collection data/users/<id>; browser storage if unavailable */
-function makeClaudeStore() {
-  const LKEY = 'edgejournal.v1';
-  let mode = 'loading', col = null, localDocs = {}, cb = null, modeCb = null;
-  const queues = new Map();
-  const readLocal = () => { try { const o = JSON.parse(localStorage.getItem(LKEY) || 'null'); return (o && o.docs) || {}; } catch (e) { return {}; } };
-  const writeLocal = () => { try { localStorage.setItem(LKEY, JSON.stringify({v: 1, docs: localDocs})); return true; } catch (e) { return false; } };
-  const emitLocal = () => { if (cb) cb(partition(Object.entries(localDocs))); };
-  const useLocal = () => { mode = 'local'; localDocs = readLocal(); emitLocal(); };
-  const enqueue = (id, fn) => { const next = (queues.get(id) || Promise.resolve()).catch(() => {}).then(fn); queues.set(id, next); return next; };
-  async function withRetry(fn) {
-    try { return await fn(); }
-    catch (e) { if (e && e.code === 'unavailable') { await sleep(400 + Math.random() * 600); return fn(); } throw e; }
-  }
-  const api = {
-    viewer: null,
-    get mode() { return mode; },
-    async init(onData, onMode) {
-      cb = onData; modeCb = onMode;
-      let db = null, uid = null;
-      try {
-        if (window.claude && typeof window.claude.use === 'function') {
-          const [d, u] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
-          db = d;
-          if (u) {
-            try { const me = await u.me(); uid = me.id; api.viewer = {name: me.name || '', avatar: me.avatarUrl || ''}; } catch (e) { uid = null; }
-          }
-        }
-      } catch (e) { db = null; }
-      if (db && uid) {
-        try {
-          col = db.collection('data/users/' + uid);
-          mode = 'cloud';
-          col.onSnapshot(
-            snap => cb(partition(snap.docs.filter(d => d.exists).map(d => [d.id, d.data()]))),
-            () => { mode = 'error'; if (modeCb) modeCb(mode); }
-          );
-          return mode;
-        } catch (e) { col = null; }
-      }
-      useLocal();
-      return mode;
-    },
-    async put(id, body) {
-      if (mode === 'cloud') return enqueue(id, () => withRetry(() => col.doc(id).set(body)));
-      if (mode === 'error') throw {code: 'revoked'};
-      localDocs[id] = body;
-      const ok = writeLocal(); emitLocal();
-      if (!ok) throw {code: 'local_unavailable'};
-    },
-    async remove(id) {
-      if (mode === 'cloud') return enqueue(id, () => withRetry(() => col.doc(id).delete()));
-      if (mode === 'error') throw {code: 'revoked'};
-      delete localDocs[id]; writeLocal(); emitLocal();
-    },
-    deviceDocs: () => readLocal(),
-    clearDevice: () => { try { localStorage.removeItem(LKEY); } catch (e) {} },
-    refresh() {}
-  };
-  return api;
-}
-
 /* Supabase: tables trades / journal_days / profiles, protected by row-level security (supabase/schema.sql) */
 function makeSupabaseStore(sb, uid) {
   let mode = 'loading', cb = null, loadedAt = 0, busy = null;
@@ -286,8 +220,6 @@ function makeSupabaseStore(sb, uid) {
       if (res.error) throw res.error;
       emit();
     },
-    deviceDocs: () => ({}),
-    clearDevice() {}
   };
 }
 
@@ -296,7 +228,6 @@ function writeError(e) {
   if (c === 'quota_exceeded') return 'Your journal storage is full. Export a backup in Settings, then delete old trades to make room.';
   if (c === 'invalid_argument' || c === '42501') return 'You are not allowed to change this journal, so nothing was saved.';
   if (c === 'resource_exhausted') return 'Saving too quickly. Wait a few seconds and try again.';
-  if (c === 'local_unavailable') return 'This browser blocked storage, so it could not save. Open the page on claude.ai while signed in to sync your journal.';
   if (c === 'revoked') return 'The connection to your synced journal was lost. Reload the page and try again.';
   if (c === '42P01' || m.includes('does not exist') || m.includes('schema cache')) return 'The database tables are missing. Run supabase/schema.sql in the Supabase SQL Editor (setup guide, step 2).';
   if (c === '23514') return 'That entry is too large to save. Shorten the notes and try again.';
@@ -856,7 +787,7 @@ function renderNav() {
 }
 function renderAcctBtn() {
   const b = $('#acctBtn'), u = S.user;
-  b.innerHTML = u && u.avatar ? `<img src="${esc(u.avatar)}" alt="" referrerpolicy="no-referrer">` : (SITE ? ICON.user : ICON.settings);
+  b.innerHTML = u && u.avatar ? `<img src="${esc(u.avatar)}" alt="" referrerpolicy="no-referrer">` : ICON.user;
 }
 function openMenu() {
   const m = $('#acctMenu'), u = S.user || {};
@@ -1365,14 +1296,9 @@ function renderMindset() {
 function renderSettings() {
   const el = $('#v-settings');
   const s = S.settings, mode = Store ? Store.mode : 'loading';
-  const dev = (!SITE && mode === 'cloud') ? Object.values(Store.deviceDocs()).filter(d => d && d.kind === 'trade').length : 0;
   const u = S.user || {};
   const provider = {google: 'Google', apple: 'Apple', github: 'GitHub', discord: 'Discord', twitter: 'X', email: 'email and password'}[u.provider] || u.provider;
-  const modeText = SITE
-    ? 'Your journal is stored in your account and syncs to any device you sign in on. Only you can see it.'
-    : mode === 'cloud' ? 'Your journal syncs to your Claude account and follows you to any device. It is private to you: even if you share this page, other people only see their own journal.'
-    : mode === 'local' ? 'Syncing is not available in this view, so your journal is saved in this browser only. Open the page on claude.ai while signed in to sync it across devices.'
-    : mode === 'error' ? 'The connection to your synced journal was lost. Reload the page.' : 'Connecting…';
+  const modeText = 'Your journal is stored in your account and syncs to any device you sign in on. Only you can see it.';
   const f = (id, label, val, extra) => `<div class="field"><label for="${id}">${label}</label><input id="${id}" ${extra || 'type="number" inputmode="decimal" step="any"'} value="${esc(val)}"></div>`;
   const accountCardHtml = SITE ? `<div class="card" style="grid-column:1/-1">
       <div class="card-head"><div><div class="eyebrow">Your account</div><h2 class="h3">Profile</h2></div></div>
@@ -1431,7 +1357,6 @@ function renderSettings() {
       <div class="card">
         <div class="card-head"><div><div class="eyebrow">Data</div><h2 class="h3">Backup &amp; sync</h2></div><span class="sync ${S.previewOn ? '' : mode === 'cloud' ? 'cloud' : mode === 'local' ? 'local' : mode === 'error' ? 'err' : ''}"><i></i><span style="display:inline">${mode === 'cloud' ? 'Synced' : mode === 'local' ? 'This device' : mode === 'error' ? 'Not syncing' : 'Connecting'}</span></span></div>
         <p class="small" style="max-width:62ch">${esc(modeText)}</p>
-        ${dev ? `<div class="preview-banner" style="margin:14px 0 0"><div><div class="eyebrow">On this device</div><p>${plural(dev, 'trade')} from an earlier visit are saved only in this browser.</p></div><button class="btn btn-primary btn-sm" data-act="migrate">Move them to my synced journal</button></div>` : ''}
         <div class="row" style="margin-top:16px">
           <button class="btn" data-act="export-json">Export backup (.json)</button>
           <button class="btn" data-act="export-csv">Export trades (.csv)</button>
@@ -1767,18 +1692,7 @@ function downloadText(filename, text) {
   a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
-async function offerFile(filename, text) {
-  if (SITE) { downloadText(filename, text); toast('Export downloaded'); return; }
-  let dl = null;
-  try { dl = window.claude && typeof window.claude.use === 'function' ? await window.claude.use('downloads') : null; } catch (e) { dl = null; }
-  if (dl) {
-    try { await dl.save({filename, data: text}); toast('Export ready'); return; }
-    catch (e) { const c = e && e.code; if (c === 'declined') return; if (c === 'rate_limited') { toast('A save prompt is already open.'); return; } }
-  }
-  openSheet(`<div class="sheet-head"><div><div class="eyebrow">Export</div><h2 class="h2" id="sheetTitle">${esc(filename)}</h2></div><button class="icon-btn" data-act="close" aria-label="Close">×</button></div>
-    <div class="sheet-body"><p class="small" style="margin-bottom:12px">Saving files isn't available here. Copy the text below and paste it into a file named <b>${esc(filename)}</b>.</p><textarea id="copyBox" readonly style="min-height:50vh;font-family:var(--f-mono);font-size:12px">${esc(text)}</textarea></div>
-    <div class="sheet-foot"><button class="btn" data-act="close">Close</button><button class="btn btn-primary" data-act="copy-box">Copy</button></div>`);
-}
+function offerFile(filename, text) { downloadText(filename, text); toast('Export downloaded'); }
 function toCSV(trades) {
   const cols = ['date','entryTime','exitTime','sym','side','qty','entry','exit','stop','target','fees','pnl','r','session','setup','timeframe','confluences','origin','reason','emoBefore','emoDuring','emoAfter','confidence','stress','ready','followedPlan','mistakes','exitReason','wentWell','differently','lesson','grade','chartUrl'];
   const cell = v => { if (v == null) return ''; if (Array.isArray(v)) v = v.join('; '); const s = String(v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
@@ -2113,16 +2027,6 @@ document.addEventListener('click', async e => {
       S.wipeArmed = false; lsSet('ej.hasTrades', '0');
       toast(`Deleted ${n} item${n === 1 ? '' : 's'}`); renderAll(); break;
     }
-    case 'migrate': {
-      const docs = Store.deviceDocs();
-      let n = 0;
-      for (const [id, body] of Object.entries(docs)) {
-        if (!body || (body.kind !== 'trade' && body.kind !== 'day')) continue;
-        if (body.kind === 'trade' && S.trades.some(t => t.id === id)) continue;
-        try { await Store.put(id, body); n++; } catch (err) { toast(writeError(err), 'bad'); break; }
-      }
-      Store.clearDevice(); toast(`Moved ${n} item${n === 1 ? '' : 's'} to your synced journal`); renderAll(); break;
-    }
     /* website account */
     case 'sign-out': closeMenu(); if (A.sb) { await A.sb.auth.signOut(); } break;
     case 'delete-account': S.delArmed = true; renderAll(); break;
@@ -2224,26 +2128,8 @@ function onData(out) {
   if (out.settings) S.settings = mergeSettings(out.settings);
   S.loading = false; S.loadError = null;
   if (S.trades.length) { S.previewOn = false; lsSet('ej.hasTrades', '1'); }
-  else { lsSet('ej.hasTrades', '0'); S.previewOn = lsGet('ej.hidePreview') !== '1'; }
+  else { lsSet('ej.hasTrades', '0'); S.previewOn = lsGet('ej.hidePreview') === '0'; } // sample only when asked for
   renderAll();
-}
-function bootClaude() {
-  S.sample = makeSample();
-  const had = lsGet('ej.hasTrades') === '1';
-  S.loading = had;
-  S.previewOn = !had && lsGet('ej.hidePreview') !== '1';
-  Store = makeClaudeStore();
-  S.started = true;
-  $('#boot').hidden = true; $('#auth').hidden = true; $('#app').hidden = false;
-  applyRoute(parseRoute(location.hash), {});
-  Store.init(onData, () => { renderSync(); toast('Lost the connection to your synced journal. Reload the page.', 'bad'); })
-    .then(mode => {
-      if (Store.viewer) { S.user = {name: Store.viewer.name, avatar: Store.viewer.avatar, provider: 'claude'}; renderNav(); }
-      if (mode !== 'cloud') S.loading = false;
-      renderAll();
-      setTimeout(() => { if (S.loading) { S.loading = false; renderAll(); } }, 12000);
-    })
-    .catch(() => { S.loading = false; renderAll(); });
 }
 async function bootSite() {
   S.sample = makeSample();
@@ -2268,5 +2154,5 @@ async function bootSite() {
   else if (session) startApp(session);
   else renderAuth();
 }
-if (SITE) bootSite(); else bootClaude();
+bootSite();
 })();

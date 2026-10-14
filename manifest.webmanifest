@@ -1,0 +1,12 @@
+{
+  "name": "Edge Journal",
+  "short_name": "Edge Journal",
+  "description": "Trading journal: P&L by day, week, month and year, with psychology notes on every trade.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#040406",
+  "theme_color": "#040406",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en" class="site">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Edge Journal</title>
+<meta name="description" content="A trading journal for futures traders. Log every trade with why you took it and how you felt, and see your P&L by day, week, month and year.">
+<meta name="theme-color" content="#040406">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Edge Journal">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<!-- SHELL START -->
+<div id="boot" class="boot" aria-live="polite"><span class="spinner" aria-label="Loading"></span></div>
+<div id="auth" class="auth" hidden></div>
+<div id="app" hidden>
+  <header class="topbar">
+    <div class="topbar-in">
+      <a class="brand" href="#home" data-go="home" aria-label="Edge Journal home">
+        <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+          <defs><linearGradient id="ejg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" style="stop-color:var(--violet)"/><stop offset=".55" style="stop-color:var(--magenta)"/><stop offset="1" style="stop-color:var(--amber)"/></linearGradient></defs>
+          <rect width="30" height="30" rx="9" style="fill:var(--surface-3)"/>
+          <g style="fill:url(#ejg);stroke:url(#ejg)" stroke-width="1.6" stroke-linecap="round">
+            <line x1="8.5" y1="14" x2="8.5" y2="23"/><rect x="6.5" y="16" width="4" height="5" rx="1"/>
+            <line x1="15" y1="10" x2="15" y2="20"/><rect x="13" y="12" width="4" height="6" rx="1"/>
+            <line x1="21.5" y1="6" x2="21.5" y2="16"/><rect x="19.5" y="7.5" width="4" height="6.5" rx="1"/>
+          </g>
+        </svg>
+        <span>Edge<b>Journal</b></span>
+      </a>
+      <nav class="tabs" id="topNav" aria-label="Main"></nav>
+      <div class="top-actions">
+        <span id="sync" class="sync"><i></i><span>Connecting…</span></span>
+        <button class="btn btn-primary" id="btnLog" data-act="log">+ Log trade</button>
+        <div class="acct">
+          <button class="acct-btn" id="acctBtn" data-act="acct-menu" aria-haspopup="menu" aria-expanded="false" aria-label="Account and settings"></button>
+          <div class="menu" id="acctMenu" role="menu" hidden></div>
+        </div>
+      </div>
+    </div>
+  </header>
+  <main class="wrap">
+    <div id="banner"></div>
+    <section id="v-home" class="view" aria-label="Home"></section>
+    <section id="v-reports" class="view" aria-label="Reports" hidden></section>
+    <section id="v-calendar" class="view" aria-label="Calendar" hidden></section>
+    <section id="v-trades" class="view" aria-label="Trades" hidden></section>
+    <section id="v-mindset" class="view" aria-label="Mindset" hidden></section>
+    <section id="v-settings" class="view" aria-label="Settings" hidden></section>
+  </main>
+  <nav class="bottom-nav" id="bottomNav" aria-label="Main"></nav>
+  <button class="fab" data-act="log" aria-label="Log a trade">+</button>
+</div>
+<div id="overlay" class="overlay" hidden><div id="sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle"></div></div>
+<div id="tip" class="tip" role="tooltip" hidden></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<input type="file" id="importFile" accept=".json,application/json" hidden>
+<!-- SHELL END -->
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
